@@ -63,7 +63,14 @@ class Pipeline:
             return []
         newest_topic = rows[0]["topic_id"]
         rows = [r for r in rows if r["topic_id"] == newest_topic]
-        return [read_json(r["path"], {}) for r in rows]
+        # A topic can have several regenerated script versions. Use only the
+        # newest script per language so voice/visual/render run once each.
+        by_lang: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            language = str(row.get("language", "en"))
+            if language not in by_lang:
+                by_lang[language] = read_json(row["path"], {}) or {}
+        return list(by_lang.values())
 
     def _load(self, folder: str, topic_id: str, lang: str, name: str) -> dict[str, Any]:
         candidates = glob.glob(str(data_path(folder, f"{topic_id}_{lang}", name)))
