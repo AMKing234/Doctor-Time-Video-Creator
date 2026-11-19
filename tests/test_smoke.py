@@ -215,6 +215,7 @@ class LayoutTests(unittest.TestCase):
                      "vendor/youtube-agent-skill/LICENSE", ".githooks/pre-commit",
                      "OPTIONAL_TOOLS.md", "scripts/fetch_vendors.sh",
                      "dashboard/studio.html", "dashboard/static/three/three.module.js",
+                     "dashboard/static/three/three.core.js",
                      "skills/tool_registry.py"]:
             self.assertTrue((ROOT / path).exists(), path)
 

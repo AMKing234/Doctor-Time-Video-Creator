@@ -98,6 +98,10 @@ def create_app():
     def index():
         return HTML
 
+    @app.route("/favicon.ico")
+    def favicon():
+        return "", 204
+
     @app.route("/studio")
     def studio():
         return send_from_directory(Path(__file__).parent, "studio.html")
