@@ -124,12 +124,98 @@ class ControlTests(unittest.TestCase):
         self.assertFalse(upload_override())
 
 
+class SkillTests(unittest.TestCase):
+    def test_vendored_skills_available(self):
+        from skills import youtube_agent
+        info = youtube_agent.available()
+        self.assertEqual(len(info["skills"]), 11)
+        self.assertTrue(info["tools_ready"], info["tools"])
+
+    def test_hook_and_title_tools(self):
+        from skills import youtube_agent
+        hook = youtube_agent.score_hook("2,600 years ago a stone changed everything")
+        self.assertIsInstance(hook, list)
+        self.assertIn("verdict", hook[0])
+        title = youtube_agent.lint_title("The Great Pyramid: Built for Eternity", "GREAT PYRAMID")
+        self.assertIn("score", title[0])
+
+    def test_resource_estimate(self):
+        from skills.resource import estimate
+        result = estimate({"title": "Unit", "language": "en",
+                           "scenes": [{"text": "word " * 100}]})
+        self.assertEqual(result["scene_count"], 1)
+        self.assertGreater(result["word_count"], 0)
+        self.assertGreater(result["spoken_minutes"], 0)
+
+    def test_skill_report_parse(self):
+        from local_agent.skill_installer import parse_report
+        with TemporaryDirectory() as d:
+            p = Path(d) / "report.md"
+            p.write_text("# Report\n- pip: Pillow\n- asset: ancient rome\n")
+            report = parse_report(p)
+            self.assertIn("Pillow", report["pip"])
+            self.assertIn("ancient rome", report["assets"])
+
+
+class FallbackTests(unittest.TestCase):
+    def test_local_save_without_files_does_not_crash(self):
+        """Regression: read_json(None) used to raise TypeError when files were absent."""
+        import local_agent.fallback as fallback
+        with TemporaryDirectory() as d:
+            original = fallback.ARCHIVE_ROOT
+            fallback.ARCHIVE_ROOT = Path(d)
+            try:
+                result = fallback.local_save("missing_video_xyz", "unit test")
+                self.assertFalse(result["youtube_uploaded"])
+                self.assertTrue((Path(d) / "missing_video_xyz" / "REPORT.txt").exists())
+            finally:
+                fallback.ARCHIVE_ROOT = original
+
+    def test_ensure_delivered(self):
+        import local_agent.fallback as fallback
+        with TemporaryDirectory() as d:
+            original = fallback.ARCHIVE_ROOT
+            fallback.ARCHIVE_ROOT = Path(d)
+            try:
+                up = fallback.ensure_delivered({"youtube_id": "abc123"}, "v1")
+                self.assertTrue(up["youtube_uploaded"])
+                self.assertEqual(up["youtube_id"], "abc123")
+                local = fallback.ensure_delivered(None, "v2")
+                self.assertIn("archive", local)
+            finally:
+                fallback.ARCHIVE_ROOT = original
+
+
+class VaultTests(unittest.TestCase):
+    def test_secret_scanner_blocks_credentials(self):
+        from local_agent.vault import assert_no_secrets, SecretLeakError
+        with self.assertRaises(SecretLeakError):
+            assert_no_secrets({"client_secret": "value"})
+        with self.assertRaises(SecretLeakError):
+            assert_no_secrets({"note": "gho_" + "a" * 30})
+        assert_no_secrets({"type": "status_request", "node": "local"})
+
+    def test_bootstrap_essentials(self):
+        from local_agent.bootstrap import check
+        state = check()
+        self.assertIn("essential_missing", state)
+        self.assertIn("optional_missing", state)
+        self.assertEqual(state["essential_missing"], [])
+
+
 class LayoutTests(unittest.TestCase):
     def test_structure_exists(self):
         for path in ["main.py", "requirements.txt", "Dockerfile", ".env.example",
                      "config/settings.json", ".github/workflows/main.yml",
                      ".github/workflows/research.yml", ".github/workflows/video-production.yml",
-                     ".github/workflows/upload.yml", ".github/workflows/analytics.yml"]:
+                     ".github/workflows/upload.yml", ".github/workflows/analytics.yml",
+                     ".github/workflows/sync.yml", "LOCAL_SETUP.md", "config/local.json",
+                     "local_agent/agent.py", "local_agent/vault.py", "local_agent/fallback.py",
+                     "skills/youtube_agent.py", "skills/resource.py", "skills/seo_skill.py",
+                     "vendor/youtube-agent-skill/LICENSE", ".githooks/pre-commit",
+                     "OPTIONAL_TOOLS.md", "scripts/fetch_vendors.sh",
+                     "dashboard/studio.html", "dashboard/static/three/three.module.js",
+                     "skills/tool_registry.py"]:
             self.assertTrue((ROOT / path).exists(), path)
 
 

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Factory — 3D Thumbnail Studio</title>
+<style>
+body{background:#0B0F19;color:#E8EAF0;font:14px system-ui,sans-serif;margin:0;padding:22px}
+h1{color:#D4AF37;margin:0 0 4px;font-size:22px}
+.sub{color:#8A93A8;margin-bottom:18px}
+a{color:#D4AF37}
+.wrap{max-width:1320px;margin:auto}
+.controls{display:grid;grid-template-columns:2fr 2fr 1fr auto auto;gap:10px;margin-bottom:14px}
+.controls label{display:flex;flex-direction:column;gap:4px;color:#8A93A8;font-size:12px}
+input,select,button{padding:9px;border-radius:7px;border:1px solid #23304A;background:#141B2B;color:#E8EAF0}
+button{cursor:pointer;font-weight:700;align-self:end}
+#render{background:#1E7A45}#save{background:#8A5A00}
+canvas{width:100%;max-width:1280px;border:1px solid #23304A;border-radius:10px;display:block;background:#05070D}
+#status{color:#8A93A8;min-height:18px;font-size:12px}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "/static-three/three.module.js",
+    "three/addons/": "/static-three/"
+  }
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+<h1>3D Thumbnail Studio</h1>
+<div class="sub"><a href="/">← Dashboard</a> · Powered by vendored three.js — renders locally, saves to your asset library.</div>
+<div class="controls">
+  <label>Title<input id="title" maxlength="60" value="ALL ROADS LEAD TO ROME"></label>
+  <label>Subtitle<input id="sub" maxlength="80" value="The network that built an empire"></label>
+  <label>Theme<select id="theme">
+    <option value="gold">Gold / Emerald</option>
+    <option value="crimson">Crimson</option>
+    <option value="teal">Teal</option>
+  </select></label>
+  <button id="render">Update</button>
+  <button id="save">Save Thumbnail</button>
+</div>
+<canvas id="c" width="1280" height="720"></canvas>
+<pre id="status">Ready.</pre>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const status = document.getElementById('status');
+const canvas = document.getElementById('c');
+const THEMES = {
+  gold:    { main:'#D4AF37', glow:'#FFD86B', accent:'#1E7A45', bg:'#080B14' },
+  crimson: { main:'#E63946', glow:'#FF8A8A', accent:'#F1FAEE', bg:'#120608' },
+  teal:    { main:'#2EC4B6', glow:'#8FFFF0', accent:'#FFD166', bg:'#05121A' },
+};
+
+let renderer, scene, camera, composer, plaque, titleMesh, subMesh, particles, group;
+const mouse = { x:0, y:0 };
+
+function textTexture(text, size, color, weight = 900) {
+  const tc = document.createElement('canvas');
+  tc.width = 1200; tc.height = 300;
+  const ctx = tc.getContext('2d');
+  ctx.clearRect(0, 0, tc.width, tc.height);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `${weight} ${size}px sans-serif`;
+  ctx.shadowColor = color; ctx.shadowBlur = 26;
+  ctx.fillStyle = color;
+  ctx.fillText(text, tc.width/2, tc.height/2, tc.width - 60);
+  const tex = new THREE.CanvasTexture(tc);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeParticles(theme) {
+  const count = 420, pos = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    pos[i*3]   = (Math.random() - 0.5) * 18;
+    pos[i*3+1] = (Math.random() - 0.5) * 10;
+    pos[i*3+2] = -2 - Math.random() * 10;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({ color:theme.glow, size:0.045, transparent:true, opacity:0.65 });
+  return new THREE.Points(geo, mat);
+}
+
+function build() {
+  const theme = THEMES[document.getElementById('theme').value];
+  if (!renderer) {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias:true, preserveDrawingBuffer:true });
+    renderer.setPixelRatio(1);
+    renderer.setSize(1280, 720, false);
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(theme.bg);
+    camera = new THREE.PerspectiveCamera(42, 1280/720, 0.1, 100);
+    camera.position.set(0, 0, 7.2);
+    group = new THREE.Group();
+    scene.add(group);
+
+    plaque = new THREE.Mesh(
+      new THREE.BoxGeometry(6.4, 3.4, 0.18),
+      new THREE.MeshStandardMaterial({ color:0x11182A, metalness:0.85, roughness:0.28 })
+    );
+    group.add(plaque);
+
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(6.7, 3.7, 0.1),
+      new THREE.MeshStandardMaterial({ color:0xD4AF37, metalness:0.9, roughness:0.2 })
+    );
+    frame.position.z = -0.08;
+    group.add(frame);
+
+    titleMesh = new THREE.Mesh(new THREE.PlaneGeometry(6.0, 1.5),
+      new THREE.MeshBasicMaterial({ transparent:true, depthWrite:false }));
+    titleMesh.position.set(0, 0.42, 0.12);
+    group.add(titleMesh);
+
+    subMesh = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 1.0),
+      new THREE.MeshBasicMaterial({ transparent:true, depthWrite:false }));
+    subMesh.position.set(0, -0.85, 0.12);
+    group.add(subMesh);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+    scene.add(ambient);
+    const key = new THREE.PointLight(0xffffff, 60, 30);
+    key.position.set(-4, 4, 6); scene.add(key);
+    const rim = new THREE.PointLight(0xffffff, 40, 30);
+    rim.position.set(5, -3, 4); scene.add(rim);
+
+    particles = makeParticles(theme);
+    scene.add(particles);
+
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(1280,720), 0.7, 0.5, 0.25));
+    composer.addPass(new OutputPass());
+
+    canvas.addEventListener('mousemove', e => {
+      const r = canvas.getBoundingClientRect();
+      mouse.x = ((e.clientX - r.left) / r.width - 0.5) * 2;
+      mouse.y = ((e.clientY - r.top) / r.height - 0.5) * 2;
+    });
+
+    function animate(t) {
+      requestAnimationFrame(animate);
+      group.rotation.y = mouse.x * 0.18 + Math.sin(t/4000) * 0.05;
+      group.rotation.x = -mouse.y * 0.12;
+      particles.rotation.z += 0.0004;
+      camera.position.x += (mouse.x * 0.35 - camera.position.x) * 0.04;
+      camera.position.y += (-mouse.y * 0.25 - camera.position.y) * 0.04;
+      camera.lookAt(0, 0, 0);
+      composer.render();
+    }
+    requestAnimationFrame(animate);
+  }
+
+  scene.background.set(theme.bg);
+  frameMaterial().color.set(theme.accent);
+  particles.material.color.set(theme.glow);
+
+  const title = document.getElementById('title').value || 'UNTITLED';
+  const sub = document.getElementById('sub').value || '';
+  titleMesh.material.map?.dispose();
+  titleMesh.material.map = textTexture(title.toUpperCase(), 96, theme.main);
+  titleMesh.material.needsUpdate = true;
+  subMesh.material.map?.dispose();
+  subMesh.material.map = textTexture(sub.toUpperCase(), 54, theme.glow, 700);
+  subMesh.material.needsUpdate = true;
+  status.textContent = `Rendered: ${title} (${document.getElementById('theme').value})`;
+}
+
+function frameMaterial() {
+  // second child is the accent frame
+  return group.children[1].material;
+}
+
+document.getElementById('render').onclick = build;
+document.getElementById('theme').onchange = build;
+
+document.getElementById('save').onclick = async () => {
+  try {
+    const image = canvas.toDataURL('image/jpeg', 0.92);
+    const res = await fetch('/api/studio/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ image, title: document.getElementById('title').value,
+                             theme: document.getElementById('theme').value }),
+    });
+    const data = await res.json();
+    status.textContent = data.ok ? `Saved to ${data.path} (${data.bytes} bytes)` : JSON.stringify(data);
+  } catch (e) { status.textContent = 'Save failed: ' + e; }
+};
+
+build();
+</script>
+</body>
+</html>

@@ -33,7 +33,7 @@ from database.manager import Database
 log = get_logger("orchestrator")
 
 STAGES = ["research", "script", "voice", "visual", "video", "seo",
-          "upload", "analytics", "full"]
+          "upload", "analytics", "skills", "full"]
 
 
 class Pipeline:
@@ -196,6 +196,64 @@ class Pipeline:
             return results
         return ErrorTracker(self.db).run("upload", work, attempts=2)
 
+    def skills_stage(self, uploads: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        """Run every integrated skill and guarantee local delivery if not uploaded."""
+        from skills import youtube_agent
+        from skills.resource import estimate
+        from skills.seo_skill import enhance
+        from local_agent.fallback import ensure_delivered
+        from common.utils import write_json
+
+        reports: list[dict[str, Any]] = []
+        uploads = uploads or []
+
+        def safe(fn, *args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as exc:  # noqa: BLE001
+                return {"error": str(exc)}
+
+        for script in self._scripts():
+            topic, lang = script["topic_id"], script["language"]
+            video_id = f"{topic}_{lang}"
+            out_dir = data_path("skills", video_id)
+            render = {}
+            seo = {}
+            try:
+                render = self._load("videos", topic, lang, "render_manifest.json")
+            except FileNotFoundError:
+                pass
+            seo_paths = glob.glob(str(data_path("seo", video_id, "seo.json")))
+            if seo_paths:
+                seo = read_json(seo_paths[0], {}) or {}
+
+            upload_result = next((u for u in uploads if u.get("video_id") == video_id), None)
+            report = {
+                "video_id": video_id,
+                "skills": youtube_agent.available(),
+                "hook_score": safe(youtube_agent.score_hook,
+                                   script["scenes"][0]["text"] if script.get("scenes") else ""),
+                "title_thumbnail_lint": safe(youtube_agent.lint_title,
+                                             seo.get("title", script.get("title", "")),
+                                             seo.get("title", "")[:28].upper()),
+                "resource": safe(estimate, script, render or None),
+                "seo": safe(enhance, seo or {"topic_id": topic, "language": lang}, script)
+                if seo else {"skipped": True},
+                "chapters": safe(youtube_agent.chapters, render.get("subtitle_path", ""))
+                if render.get("subtitle_path") else {"skipped": True},
+                "edit_decision_list": safe(youtube_agent.edit_decision_list,
+                                           render.get("subtitle_path", ""))
+                if render.get("subtitle_path") else {"skipped": True},
+                "delivery": ensure_delivered(upload_result, video_id,
+                                             "upload not performed; saved locally"),
+            }
+            write_json(out_dir / "skills_report.json", report)
+            reports.append(report)
+
+        result = {"reports": reports, "skills_used": youtube_agent.available()["skills"]}
+        log.info("Skills stage complete: %d videos, %d skills", len(reports), len(result["skills_used"]))
+        return result
+
     def analytics(self) -> dict[str, Any]:
         from analytics_engine.engine import AnalyticsEngine
         from error_handler.handler import ErrorTracker
@@ -210,11 +268,14 @@ class Pipeline:
         self.seo()
         archived = self.archive()
         uploads = self.upload()
+        skills = self.skills_stage(uploads)
         report = self.analytics()
         return {
             "videos": [r["video_path"] for r in renders],
             "archived": [a["uri"] for a in archived],
             "uploads": [u["mode"] for u in uploads],
+            "skills": len(skills["skills_used"]),
+            "deliveries": [r["delivery"] for r in skills["reports"]],
             "best_hour": report["recommendation"]["best_hour_ist"],
         }
 
@@ -262,7 +323,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.stage == "full":
             result = pipeline.full()
         else:
-            result = getattr(pipeline, args.stage)()
+            method = "skills_stage" if args.stage == "skills" else args.stage
+            result = getattr(pipeline, method)()
         print("\n=== STAGE RESULT ===")
         if isinstance(result, (dict, list)):
             import json

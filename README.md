@@ -6,7 +6,23 @@ visuals, rendering, thumbnails, SEO, publishing and analytics all run automatica
 
 > ⚠️ **Upload is disabled by default.** The upload stage runs in **dry-run** mode
 > and only writes a local plan. Nothing is sent to YouTube until you explicitly
-> set `YOUTUBE_ENABLED=true` and configure OAuth credentials.
+> connect OAuth **on the local node** and switch upload ON.
+
+## Hybrid local + cloud system
+
+This repository now has two cooperating nodes:
+
+- **Cloud (GitHub Actions):** scheduled research, scripts, voice, visuals,
+  rendering, SEO and analytics.
+- **Local (this Termux device):** YouTube OAuth + upload, tool collection,
+  visual/thumbnail asset library, skill auto-setup, ON/OFF control, and offline
+  queueing. **YouTube credentials never leave this device.**
+- **Sync bus:** a dedicated `sync` git branch exchanges only non-secret JSON
+  manifests. A scanner blocks anything that looks like a credential.
+
+See [LOCAL_SETUP.md](LOCAL_SETUP.md) for the full local guide and
+[OPTIONAL_TOOLS.md](OPTIONAL_TOOLS.md) for all APIs, credentials and the 12 vendored
+tool/skill repositories (including the 3D thumbnail studio at `/studio`).
 
 ---
 

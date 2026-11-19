@@ -1,9 +1,20 @@
-# Secrets
+# Secrets — local-only credentials. NEVER commit these.
 .env
 *.pem
 token.json
 client_secrets.json
+client_secret*.json
 credentials.json
+*youtube*token*.json
+*youtube*secret*.json
+
+# Local node: vault, state, downloaded assets, sync worktree
+local_agent/vault/
+local_agent/state/
+local_agent/assets/
+.sync-work/
+sync-data/
+bus/
 
 # Runtime data (never commit large video/assets)
 data/
@@ -26,3 +37,9 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Heavy vendored tool repos (~830 MB) stay local; fetch with scripts/fetch_vendors.sh
+# Only the small, pipeline-wired youtube-agent-skill is committed.
+vendor/*
+!vendor/youtube-agent-skill/
+# The 3D studio's minimal three.js runtime is committed under dashboard/static/three/

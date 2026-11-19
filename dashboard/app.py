@@ -26,7 +26,7 @@ pre{background:#101624;border:1px solid #23304A;padding:16px;border-radius:10px;
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px;border-bottom:1px solid #23304A;text-align:left}
 #msg{color:#8A93A8;min-height:20px;margin-top:8px}
 </style></head><body>
-<h1>AI Documentary Factory</h1><div class="sub">Live automation status — updates every 15 seconds</div>
+<h1>AI Documentary Factory</h1><div class="sub">Live automation status — updates every 15 seconds · <a href="/studio" style="color:#D4AF37">🎬 3D Thumbnail Studio</a> · <span id="toolsInfo"></span></div>
 
 <h2>Automation Control</h2>
 <div class="grid">
@@ -63,6 +63,8 @@ async function toggle(name){
 }
 async function load(){
  await loadControl();
+ const t=await (await fetch('/api/tools')).json();
+ document.getElementById('toolsInfo').textContent=`${t.installed}/${t.count} tools vendored`;
  const s=await (await fetch('/api/stats')).json();
  document.getElementById('stats').innerHTML=Object.entries(s).map(([k,v])=>
    `<div class="card"><b>${v}</b><span>${k}</span></div>`).join('');
@@ -80,7 +82,14 @@ load();setInterval(load,15000);
 
 
 def create_app():
-    from flask import Flask, jsonify, request
+    import base64
+    from pathlib import Path
+
+    from flask import Flask, jsonify, request, send_from_directory
+
+    from common.paths import ROOT
+    from common.utils import iso_now
+    from skills.tool_registry import report as tools_report
 
     app = Flask(__name__)
     db = Database()
@@ -88,6 +97,38 @@ def create_app():
     @app.route("/")
     def index():
         return HTML
+
+    @app.route("/studio")
+    def studio():
+        return send_from_directory(Path(__file__).parent, "studio.html")
+
+    @app.route("/vendor/<path:filename>")
+    def vendor_file(filename):
+        return send_from_directory(ROOT / "vendor", filename)
+
+    @app.route("/static-three/<path:filename>")
+    def studio_three(filename):
+        return send_from_directory(Path(__file__).parent / "static" / "three", filename)
+
+    @app.route("/api/tools")
+    def tools():
+        return jsonify(tools_report())
+
+    @app.route("/api/studio/save", methods=["POST"])
+    def studio_save():
+        payload = request.get_json(silent=True) or {}
+        data = str(payload.get("image", ""))
+        if not data.startswith("data:image/"):
+            return jsonify({"error": "no image data"}), 400
+        raw = base64.b64decode(data.split(",", 1)[1])
+        dest = ROOT / "local_agent" / "assets" / "thumbnails"
+        dest.mkdir(parents=True, exist_ok=True)
+        name = "studio_" + iso_now().replace(":", "-") + ".jpg"
+        path = dest / name
+        path.write_bytes(raw)
+        log.info("3D studio thumbnail saved: %s (%d bytes)", path, len(raw))
+        return jsonify({"ok": True, "path": str(path), "bytes": len(raw),
+                        "title": payload.get("title", "")})
 
     @app.route("/api/control")
     def control_state():

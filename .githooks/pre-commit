@@ -1,0 +1,19 @@
+#!/bin/sh
+# Blocks local credentials from ever entering git history.
+staged=$(git diff --cached --name-only)
+
+for file in $staged; do
+  case "$file" in
+    local_agent/vault/*|*client_secret*|*token.json|*.pem)
+      echo "BLOCKED: credential-like file staged: $file" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if git diff --cached | grep -Eq 'gho_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|ya29\.[A-Za-z0-9_-]+|AIza[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}'; then
+  echo "BLOCKED: credential-like string found in staged diff" >&2
+  exit 1
+fi
+
+exit 0
