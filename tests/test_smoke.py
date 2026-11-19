@@ -110,18 +110,26 @@ class ContentTests(unittest.TestCase):
 
 class ControlTests(unittest.TestCase):
     def test_master_and_upload_switches(self):
+        import common.control as control
         from common.control import (
             automation_enabled, set_automation_enabled,
             set_upload_enabled, upload_override,
         )
-        set_automation_enabled(False)
-        self.assertFalse(automation_enabled())
-        set_automation_enabled(True)
-        self.assertTrue(automation_enabled())
-        set_upload_enabled(True)
-        self.assertTrue(upload_override())
-        set_upload_enabled(False)
-        self.assertFalse(upload_override())
+        # Isolate from the real data/control.json so tests never change live state.
+        with TemporaryDirectory() as d:
+            original = control.CONTROL_FILE
+            control.CONTROL_FILE = Path(d) / "control.json"
+            try:
+                set_automation_enabled(False)
+                self.assertFalse(automation_enabled())
+                set_automation_enabled(True)
+                self.assertTrue(automation_enabled())
+                set_upload_enabled(True)
+                self.assertTrue(upload_override())
+                set_upload_enabled(False)
+                self.assertFalse(upload_override())
+            finally:
+                control.CONTROL_FILE = original
 
 
 class SkillTests(unittest.TestCase):
