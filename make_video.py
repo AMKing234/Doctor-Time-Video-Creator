@@ -55,7 +55,11 @@ def _timeline_facts(timeline: str) -> list[dict[str, str]]:
         for sep in (".", ")"):
             if len(line) > 2 and line[0].isdigit() and sep in line[:4]:
                 line = line.split(sep, 1)[1].strip()
-        if len(line) >= 3:
+        if "|||" in line:
+            en, hi = (part.strip() for part in line.split("|||", 1))
+            if en or hi:
+                facts.append({"en": en or hi, "hi": hi or en})
+        elif len(line) >= 3:
             facts.append({"en": line, "hi": line})
     return facts
 
@@ -73,8 +77,10 @@ def _scale_facts(facts: list[dict[str, str]], minutes: float,
                   "hi": "कहानी एक निर्णायक पल से शुरू होती है।"}]
     if test_mode:
         return facts[:3]
-    needed = max(len(facts), math.ceil(minutes * 60 / 55))
-    if needed <= len(facts):
+    needed = math.ceil(minutes * 60 / 55)
+    # Within ~15% of the target beat count is close enough; expanding further
+    # would only pad the documentary with repeated lines.
+    if len(facts) >= needed * 0.85:
         return facts
     expanded = list(facts)
     passes = 0
