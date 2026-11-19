@@ -19,9 +19,21 @@ def main() -> None:
     pipeline.seo()
     print("SKILLS + ARCHIVE", flush=True)
     skills = pipeline.skills_stage()
+
+    downloads = Path("/sdcard/Download")
+    saved: list[str] = []
+    if downloads.is_dir():
+        for render in renders:
+            src = Path(render["video_path"])
+            if src.exists():
+                dst = downloads / f"stone-age-to-modern-age_{render['language']}.mp4"
+                dst.write_bytes(src.read_bytes())
+                saved.append(str(dst))
+
     print(json.dumps({
         "videos": renders,
         "archives": [r["delivery"] for r in skills["reports"]],
+        "downloaded": saved,
     }, indent=2, default=str), flush=True)
 
 

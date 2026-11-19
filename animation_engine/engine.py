@@ -34,7 +34,7 @@ class AnimationEngine:
                 "z='1.10':x='(iw-iw/zoom)*(on/240)':y='ih/2-(ih/zoom/2)'"
             )
         return (
-            f"scale={self.width * 2}:{self.height * 2},"
+            f"scale={self.width}:{self.height},"
             f"zoompan={motion}:{base},"
             f"format=yuv420p,fade=t=in:st=0:d=0.5,"
             f"fade=t=out:st={max(0.1, duration - fade_out):.2f}:d={fade_out:.2f}"
@@ -47,7 +47,7 @@ class AnimationEngine:
             "-loop", "1", "-framerate", str(self.fps), "-i", str(image),
             "-t", f"{max(1.0, duration):.2f}",
             "-vf", self._motion(index, duration),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
             "-pix_fmt", "yuv420p", "-r", str(self.fps), "-an", str(out),
         ])
         return out
@@ -67,7 +67,10 @@ class AnimationEngine:
             duration = float(audio["duration"]) if audio else 6.0
             duration += audio_manifest.get("pause_ms", 320) / 1000.0
             out = out_dir / f"scene_{idx:03d}.mp4"
-            self.animate_scene(visual["path"], out, duration, idx)
+            # Resume safely: reuse clips that were already rendered in an
+            # interrupted run instead of re-encoding the whole documentary.
+            if not (out.exists() and out.stat().st_size > 0 and probe_duration(out) > 0):
+                self.animate_scene(visual["path"], out, duration, idx)
             clips.append({
                 "index": idx,
                 "path": str(out),
