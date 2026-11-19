@@ -1,0 +1,50 @@
+{
+  "hi": {
+    "label": "Hindi",
+    "locale": "hi_IN",
+    "voice_key": "hindi_male",
+    "emotion_map": {
+      "hook": "dramatic",
+      "context": "soft",
+      "fact": "neutral",
+      "climax": "strong",
+      "reflection": "reverent",
+      "outro": "soft"
+    },
+    "labels": {
+      "intro": "प्रस्तावना",
+      "chapter": "अध्याय",
+      "sources": "संदर्भ",
+      "subscribe": "सदस्यता लें"
+    },
+    "phrases": {
+      "hook": ["कल्पना कीजिए...", "इतिहास के उस पल को देखिए...", "यह कहानी आज से शुरू नहीं हुई..."],
+      "transition": ["लेकिन कहानी यहीं खत्म नहीं होती।", "अब आगे देखते हैं।", "इसके बाद जो हुआ वो और भी हैरान करने वाला था।"],
+      "outro": ["इतिहास हमें याद दिलाता है कि सीखना कभी रुकता नहीं।", "अगली कहानी में फिर मिलेंगे।"]
+    }
+  },
+  "en": {
+    "label": "English",
+    "locale": "en_US",
+    "voice_key": "english_male",
+    "emotion_map": {
+      "hook": "dramatic",
+      "context": "soft",
+      "fact": "neutral",
+      "climax": "strong",
+      "reflection": "reverent",
+      "outro": "soft"
+    },
+    "labels": {
+      "intro": "Introduction",
+      "chapter": "Chapter",
+      "sources": "Sources",
+      "subscribe": "Subscribe"
+    },
+    "phrases": {
+      "hook": ["Imagine for a moment...", "Look back at that moment in history...", "This story did not begin today..."],
+      "transition": ["But the story does not end here.", "Now, consider what came next.", "What happened afterwards was even more astonishing."],
+      "outro": ["History reminds us that learning never stops.", "Until the next story, stay curious."]
+    }
+  }
+}

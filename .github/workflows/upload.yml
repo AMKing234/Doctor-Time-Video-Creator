@@ -1,0 +1,35 @@
+name: YouTube Upload (dry-run by default)
+
+env:
+  AUTOMATION_ENABLED: ${{ vars.AUTOMATION_ENABLED || 'true' }}
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      YOUTUBE_ENABLED:
+        required: false
+      YOUTUBE_CLIENT_SECRETS:
+        required: false
+      YOUTUBE_TOKEN_FILE:
+        required: false
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-data
+          path: data
+      - name: Upload or dry-run
+        env:
+          # Stays false unless the repository secret is explicitly set to true.
+          YOUTUBE_ENABLED: ${{ secrets.YOUTUBE_ENABLED || 'false' }}
+        run: python main.py --stage upload

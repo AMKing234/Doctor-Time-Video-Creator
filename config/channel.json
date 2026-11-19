@@ -1,0 +1,17 @@
+{
+  "name": "Chronicle AI",
+  "handle": "@chronicleai",
+  "description": "Cinematic documentaries on history, civilization and the human story — in Hindi and English.",
+  "default_tags": ["history", "documentary", "educational", "chronicleai"],
+  "default_category_id": "27",
+  "default_language": "en",
+  "branding": {
+    "accent_color": "#D4AF37",
+    "background_color": "#0B0F19",
+    "logo_text": "CHRONICLE"
+  },
+  "upload_defaults": {
+    "title_suffix": " | Chronicle AI",
+    "description_footer": "Research-driven storytelling. Music and visuals generated for this video.\n\n#History #Documentary"
+  }
+}

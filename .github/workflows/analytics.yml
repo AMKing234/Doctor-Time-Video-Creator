@@ -1,0 +1,35 @@
+name: Analytics & Optimisation
+
+env:
+  AUTOMATION_ENABLED: ${{ vars.AUTOMATION_ENABLED || 'true' }}
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_call:
+
+jobs:
+  analytics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-data
+          path: data
+        continue-on-error: true
+      - name: Collect metrics and optimise schedule
+        run: |
+          python main.py --stage analytics
+          cat data/analytics/optimal_schedule.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: analytics-report
+          path: data/analytics/
+          retention-days: 7

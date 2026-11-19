@@ -1,0 +1,28 @@
+# Secrets
+.env
+*.pem
+token.json
+client_secrets.json
+credentials.json
+
+# Runtime data (never commit large video/assets)
+data/
+storage/
+logs/*
+!logs/.gitkeep
+*.mp4
+*.mp3
+*.wav
+*.mov
+*.mkv
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
