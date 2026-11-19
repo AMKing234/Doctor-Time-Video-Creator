@@ -49,13 +49,15 @@ def slugify(text: str, max_len: int = 70) -> str:
     return text[:max_len] or "item"
 
 
-def run_command(cmd: list[str], check: bool = True, capture: bool = True) -> subprocess.CompletedProcess:
-    """Run FFmpeg/FFprobe etc. with sane defaults."""
+def run_command(cmd: list[str], check: bool = True, capture: bool = True,
+                timeout: int | None = None) -> subprocess.CompletedProcess:
+    """Run FFmpeg/FFprobe etc. with sane defaults and an optional timeout."""
     result = subprocess.run(
         [str(c) for c in cmd],
         stdout=subprocess.PIPE if capture else None,
         stderr=subprocess.PIPE if capture else None,
         text=True,
+        timeout=timeout,
     )
     if check and result.returncode != 0:
         raise RuntimeError(

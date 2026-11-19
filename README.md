@@ -1,4 +1,6 @@
-# AI Documentary Factory — Direct Local Video Maker
+# Doctor Time Video Creator — Direct Local Video Maker
+
+GitHub: https://github.com/AMKing234/Doctor-Time-Video-Creator
 
 Aap topic + timeline + minutes dete ho; system khud research karke **Full HD Hindi/English
 documentary** bana deta hai, thumbnail aur SEO banata hai, aur sab kuch local me

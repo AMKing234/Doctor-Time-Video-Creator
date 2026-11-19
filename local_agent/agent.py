@@ -40,7 +40,7 @@ def full_status() -> dict[str, Any]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Local utilities — AI Documentary Factory")
+    p = argparse.ArgumentParser(description="Local utilities — Doctor Time Video Creator")
     p.add_argument("--status", action="store_true", help="full local status")
     p.add_argument("--tools-check", action="store_true")
     p.add_argument("--tools-install", action="store_true")

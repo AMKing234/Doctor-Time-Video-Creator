@@ -91,21 +91,36 @@ class VideoEditor:
             f"[n][m]amix=inputs=2:duration=first:dropout_transition=0[a]"
         )
 
+        # Two-step mux: Termux FFmpeg can deadlock when a subtitle input is read
+        # in the same filtergraph as a re-encoded video + `-shortest`. Render the
+        # picture+sound once, then burn in subtitles with a stream copy.
+        base = out_dir / "final_no_subs.mp4"
         final = out_dir / "final.mp4"
+        final.unlink(missing_ok=True)
         run_command([
             "ffmpeg", "-y", "-v", "error",
             "-i", str(silent), "-i", audio["merged_audio"], "-i", str(music),
-            "-i", str(srt),
             "-filter_complex", filter_complex,
             "-vf", f"fade=t=in:st=0:d={fade:.2f},"
                    f"fade=t=out:st={fade_out_start:.2f}:d={fade:.2f}",
-            "-map", "0:v:0", "-map", "[a]", "-map", "3:0",
+            "-map", "0:v:0", "-map", "[a]",
+            "-t", f"{duration:.3f}",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
             "-pix_fmt", "yuv420p", "-r", str(load_settings().get("video", {}).get("fps", 30)),
             "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
-            "-c:s", "mov_text", "-movflags", "+faststart",
-            "-shortest", str(final),
-        ])
+            "-movflags", "+faststart", str(base),
+        ], timeout=1800)
+
+        try:
+            run_command([
+                "ffmpeg", "-y", "-v", "error",
+                "-i", str(base), "-i", str(srt),
+                "-map", "0", "-map", "1", "-c", "copy", "-c:s", "mov_text",
+                "-movflags", "+faststart", str(final),
+            ], timeout=300)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Subtitle mux failed (%s); keeping external SRT", exc)
+            final = base
 
         manifest = {
             "topic_id": script["topic_id"],

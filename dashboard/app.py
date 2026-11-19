@@ -12,7 +12,7 @@ log = get_logger("dashboard")
 HTML = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Documentary Factory — Direct Video Maker</title>
+<title>Doctor Time Video Creator — Direct Video Maker</title>
 <style>
 body{background:#0B0F19;color:#E8EAF0;font:15px system-ui,sans-serif;margin:0;padding:28px}
 h1{color:#D4AF37;margin:0 0 4px}h2{color:#D4AF37;font-size:18px;margin-top:30px}
@@ -33,7 +33,7 @@ pre{background:#101624;border:1px solid #23304A;padding:16px;border-radius:10px;
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px;border-bottom:1px solid #23304A;text-align:left}
 #msg{color:#D4AF37;min-height:22px;margin-top:8px}
 </style></head><body>
-<h1>AI Documentary Factory</h1>
+<h1>Doctor Time Video Creator</h1>
 <div class="sub">Direct local video maker · no scheduler · no upload · <a href="/studio">🎬 3D Thumbnail Studio</a> · <span id="toolsInfo"></span></div>
 
 <h2>Banega kya?</h2>

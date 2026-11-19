@@ -1,1 +1,1 @@
-"""Shared utilities for the AI Documentary Factory."""
+"""Shared utilities for the Doctor Time Video Creator."""
