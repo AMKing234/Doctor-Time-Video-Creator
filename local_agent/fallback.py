@@ -1,7 +1,6 @@
-"""If YouTube upload does not happen, keep everything local and write a report.
+"""Archive every produced video locally with a full REPORT.txt.
 
-Triggered when the upload switch is OFF, credentials are missing, or an upload
-attempt fails. No data is lost and no credential is ever written to the report.
+Direct local mode: nothing is uploaded, no credential is used. No data is lost.
 """
 from __future__ import annotations
 
@@ -30,7 +29,7 @@ def _read_first(pattern: str, default: Any = None) -> Any:
     return read_json(path, default) if path else default
 
 
-def local_save(video_id: str, reason: str = "upload not performed") -> dict[str, Any]:
+def local_save(video_id: str, reason: str = "direct local production") -> dict[str, Any]:
     """Copy all produced assets into a local archive and write REPORT.txt."""
     dest = ARCHIVE_ROOT / video_id
     (dest / "visuals").mkdir(parents=True, exist_ok=True)
@@ -108,11 +107,9 @@ DESCRIPTION
 
 NOTE
 ----
-YouTube OAuth credentials are stored only in local_agent/vault/ and are never
-included in this report or sent to GitHub. When ready, run:
-  python3 local_agent/agent.py --setup-youtube <client_secrets.json>
-  python3 local_agent/agent.py --upload-on
-  python3 local_agent/agent.py --upload-video {video_id}
+This is a direct local production. Nothing was uploaded and no credentials
+are used or stored. The full video, audio, visuals, captions, SEO and this
+report are saved under local_agent/assets/archive/{video_id}/.
 """
     report_path = dest / "REPORT.txt"
     report_path.write_text(report_txt, encoding="utf-8")
@@ -130,9 +127,7 @@ included in this report or sent to GitHub. When ready, run:
     return manifest
 
 
-def ensure_delivered(upload_result: dict[str, Any] | None, video_id: str,
-                     reason: str = "upload not performed") -> dict[str, Any]:
-    """Save locally unless a real YouTube video ID came back."""
-    if upload_result and upload_result.get("youtube_id"):
-        return {"youtube_uploaded": True, "youtube_id": upload_result["youtube_id"]}
+def ensure_delivered(upload_result: dict[str, Any] | None = None,
+                     video_id: str = "", reason: str = "direct local production") -> dict[str, Any]:
+    """Guarantee delivery: archive locally with a REPORT.txt."""
     return local_save(video_id, reason)

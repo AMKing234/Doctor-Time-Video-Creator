@@ -21,9 +21,8 @@ class ConfigTests(unittest.TestCase):
         self.assertIn("en", load_languages())
         self.assertTrue(load_channel()["name"])
 
-    def test_upload_disabled_by_default(self):
-        self.assertFalse(load_settings()["upload"]["enabled"])
-        self.assertTrue(load_settings()["upload"]["dry_run"])
+    def test_direct_mode_has_no_upload_config(self):
+        self.assertNotIn("upload", load_settings())
 
 
 class UtilTests(unittest.TestCase):
@@ -108,28 +107,26 @@ class ContentTests(unittest.TestCase):
             self.assertGreater(_duration_for("word " * 400), 60)
 
 
-class ControlTests(unittest.TestCase):
-    def test_master_and_upload_switches(self):
-        import common.control as control
-        from common.control import (
-            automation_enabled, set_automation_enabled,
-            set_upload_enabled, upload_override,
-        )
-        # Isolate from the real data/control.json so tests never change live state.
-        with TemporaryDirectory() as d:
-            original = control.CONTROL_FILE
-            control.CONTROL_FILE = Path(d) / "control.json"
-            try:
-                set_automation_enabled(False)
-                self.assertFalse(automation_enabled())
-                set_automation_enabled(True)
-                self.assertTrue(automation_enabled())
-                set_upload_enabled(True)
-                self.assertTrue(upload_override())
-                set_upload_enabled(False)
-                self.assertFalse(upload_override())
-            finally:
-                control.CONTROL_FILE = original
+class DirectMakerTests(unittest.TestCase):
+    def test_timeline_parsing(self):
+        from make_video import _timeline_facts, _scale_facts, _category
+        facts = _timeline_facts("1. Road building\n- Trade networks\n* Imperial postal system\nLegacy")
+        self.assertEqual(len(facts), 4)
+        self.assertEqual(facts[0]["en"], "Road building")
+        self.assertTrue(all(f["hi"] == f["en"] for f in facts))
+        self.assertEqual(_category("Rome roads", "roman empire"), "ancient")
+        self.assertEqual(len(_scale_facts(facts, 22, False)), 24)
+        self.assertEqual(len(_scale_facts(facts, 22, True)), 3)
+
+    def test_dashboard_routes(self):
+        from dashboard.app import create_app
+        client = create_app().test_client()
+        for url in ("/", "/studio", "/static-three/three.module.js",
+                    "/api/tools", "/api/stats", "/api/videos", "/api/make/status"):
+            self.assertEqual(client.get(url).status_code, 200, url)
+        self.assertEqual(client.get("/favicon.ico").status_code, 204)
+        self.assertIn("VIDEO BANAO", client.get("/").get_data(as_text=True))
+        self.assertEqual(client.post("/api/make", json={}).status_code, 400)
 
 
 class SkillTests(unittest.TestCase):
@@ -185,24 +182,15 @@ class FallbackTests(unittest.TestCase):
             original = fallback.ARCHIVE_ROOT
             fallback.ARCHIVE_ROOT = Path(d)
             try:
-                up = fallback.ensure_delivered({"youtube_id": "abc123"}, "v1")
-                self.assertTrue(up["youtube_uploaded"])
-                self.assertEqual(up["youtube_id"], "abc123")
                 local = fallback.ensure_delivered(None, "v2")
+                self.assertFalse(local["youtube_uploaded"])
                 self.assertIn("archive", local)
+                self.assertTrue((Path(d) / "v2" / "REPORT.txt").exists())
             finally:
                 fallback.ARCHIVE_ROOT = original
 
 
-class VaultTests(unittest.TestCase):
-    def test_secret_scanner_blocks_credentials(self):
-        from local_agent.vault import assert_no_secrets, SecretLeakError
-        with self.assertRaises(SecretLeakError):
-            assert_no_secrets({"client_secret": "value"})
-        with self.assertRaises(SecretLeakError):
-            assert_no_secrets({"note": "gho_" + "a" * 30})
-        assert_no_secrets({"type": "status_request", "node": "local"})
-
+class BootstrapTests(unittest.TestCase):
     def test_bootstrap_essentials(self):
         from local_agent.bootstrap import check
         state = check()
@@ -213,12 +201,9 @@ class VaultTests(unittest.TestCase):
 
 class LayoutTests(unittest.TestCase):
     def test_structure_exists(self):
-        for path in ["main.py", "requirements.txt", "Dockerfile", ".env.example",
-                     "config/settings.json", ".github/workflows/main.yml",
-                     ".github/workflows/research.yml", ".github/workflows/video-production.yml",
-                     ".github/workflows/upload.yml", ".github/workflows/analytics.yml",
-                     ".github/workflows/sync.yml", "LOCAL_SETUP.md", "config/local.json",
-                     "local_agent/agent.py", "local_agent/vault.py", "local_agent/fallback.py",
+        for path in ["make_video.py", "main.py", "requirements.txt", "Dockerfile", ".env.example",
+                     "config/settings.json", "config/local.json", "DIRECT_MODE.md",
+                     "local_agent/agent.py", "local_agent/fallback.py",
                      "skills/youtube_agent.py", "skills/resource.py", "skills/seo_skill.py",
                      "vendor/youtube-agent-skill/LICENSE", ".githooks/pre-commit",
                      "OPTIONAL_TOOLS.md", "scripts/fetch_vendors.sh",
@@ -226,6 +211,14 @@ class LayoutTests(unittest.TestCase):
                      "dashboard/static/three/three.core.js",
                      "skills/tool_registry.py"]:
             self.assertTrue((ROOT / path).exists(), path)
+            self.assertFalse(path.startswith(".github/"), path)
+
+    def test_automation_and_upload_files_removed(self):
+        for path in [".github", "scheduler", "youtube_uploader", "analytics_engine",
+                     "notifications", "common/control.py", "local_agent/vault.py",
+                     "local_agent/sync.py", "local_agent/cloud_worker.py",
+                     "local_agent/youtube_setup.py", "LOCAL_SETUP.md"]:
+            self.assertFalse((ROOT / path).exists(), path)
 
 
 if __name__ == "__main__":

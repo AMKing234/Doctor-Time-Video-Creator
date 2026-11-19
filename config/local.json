@@ -1,17 +1,5 @@
 {
   "node_name": "local-termux",
-  "sync": {
-    "branch": "sync",
-    "worktree": ".sync-work",
-    "bus_dir": "bus",
-    "cloud_inbox": "bus/inbox",
-    "cloud_outbox": "bus/outbox"
-  },
-  "vault": {
-    "dir": "local_agent/vault",
-    "youtube_client_secrets": "youtube_client_secrets.json",
-    "youtube_token": "youtube_token.json"
-  },
   "assets": {
     "dir": "local_agent/assets",
     "visuals": "visuals",
@@ -23,15 +11,10 @@
   },
   "tools": {
     "commands": ["ffmpeg", "ffprobe", "git", "gh"],
-    "python_modules": ["requests", "edge_tts", "flask", "PIL", "boto3", "googleapiclient"],
+    "python_modules": ["requests", "edge_tts", "flask", "PIL", "boto3"],
     "fonts": [
       "/data/user/0/com.termux/files/usr/share/fonts/TTF/DejaVuSans.ttf",
       "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
     ]
-  },
-  "youtube": {
-    "upload_from_local": true,
-    "verify_on_connect": true,
-    "default_privacy": "private"
   }
 }

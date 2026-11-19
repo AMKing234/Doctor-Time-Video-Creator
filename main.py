@@ -1,30 +1,29 @@
 #!/usr/bin/env python3
-"""AI Documentary Factory — command line orchestrator.
+"""Direct local documentary maker — no scheduler, no cloud, no upload.
 
 Examples
 --------
-python main.py --stage full --test          # end-to-end local smoke run
-python main.py --stage research
-python main.py --stage script
-python main.py --stage voice
-python main.py --stage visual
-python main.py --stage video
-python main.py --stage seo
-python main.py --stage upload               # DRY RUN unless explicitly enabled
-python main.py --stage analytics
-python main.py --dashboard
+python3 main.py --stage full                 # use curated topic + default duration
+python3 main.py --stage research
+python3 main.py --stage script
+python3 main.py --stage voice
+python3 main.py --stage visual
+python3 main.py --stage video
+python3 main.py --stage seo
+python3 main.py --stage skills
+python3 main.py --dashboard                  # 3D thumbnail studio
 """
 from __future__ import annotations
 
 import argparse
 import glob
+import json
 import sys
 from pathlib import Path
 from typing import Any
 
 from common.ai_client import AIClient
 from common.config import load_settings
-from common.control import automation_enabled, set_automation_enabled, set_upload_enabled
 from common.logging_setup import get_logger
 from common.paths import ROOT, data_path, ensure_dirs
 from common.utils import read_json, setup_runtime
@@ -32,8 +31,7 @@ from database.manager import Database
 
 log = get_logger("orchestrator")
 
-STAGES = ["research", "script", "voice", "visual", "video", "seo",
-          "upload", "analytics", "skills", "full"]
+STAGES = ["research", "script", "voice", "visual", "video", "seo", "skills", "full"]
 
 
 class Pipeline:
@@ -70,7 +68,7 @@ class Pipeline:
     def _load(self, folder: str, topic_id: str, lang: str, name: str) -> dict[str, Any]:
         candidates = glob.glob(str(data_path(folder, f"{topic_id}_{lang}", name)))
         if not candidates:
-            raise FileNotFoundError(f"Missing {folder}/{name} for {topic_id}/{lang}; run earlier stage first")
+            raise FileNotFoundError(f"Missing {folder}/{name} for {topic_id}/{lang}")
         return read_json(candidates[0], {}) or {}
 
     # -- stages -----------------------------------------------------------
@@ -86,118 +84,63 @@ class Pipeline:
             return ResearchEngine(self.db, self.ai).research(topic)
         return ErrorTracker(self.db).run("research", work)
 
-    def script(self) -> list[dict[str, Any]]:
-        from script_engine.generator import ScriptEngine
-        from error_handler.handler import ErrorTracker
-        research = self._latest_research()
+    def research_topic(self, topic: dict[str, Any]) -> dict[str, Any]:
+        """Research a caller-supplied topic (used by make_video.py)."""
+        from research.engine import ResearchEngine
+        return ResearchEngine(self.db, self.ai).research(topic)
 
-        def work() -> list[dict[str, Any]]:
-            engine = ScriptEngine(self.db, self.ai)
-            return [engine.generate(research, lang, test_mode=self.test_mode)
-                    for lang in self.settings.get("content", {}).get("languages", ["hi", "en"])]
-        return ErrorTracker(self.db).run("script", work)
+    def script(self, research: dict[str, Any] | None = None,
+               languages: list[str] | None = None,
+               test_mode: bool | None = None) -> list[dict[str, Any]]:
+        from script_engine.generator import ScriptEngine
+
+        payload = research or self._latest_research()
+        langs = languages or self.settings.get("content", {}).get("languages", ["hi", "en"])
+        test = self.test_mode if test_mode is None else test_mode
+        engine = ScriptEngine(self.db, self.ai)
+        return [engine.generate(payload, lang, test_mode=test) for lang in langs]
 
     def voice(self) -> list[dict[str, Any]]:
         from voice_engine.engine import VoiceEngine
-        from error_handler.handler import ErrorTracker
         engine = VoiceEngine()
-
-        def work() -> list[dict[str, Any]]:
-            return [engine.generate(s) for s in self._scripts()]
-        return ErrorTracker(self.db).run("voice", work)
+        return [engine.generate(s) for s in self._scripts()]
 
     def visual(self) -> list[dict[str, Any]]:
         from visual_engine.engine import VisualEngine
-        from error_handler.handler import ErrorTracker
         engine = VisualEngine()
-
-        def work() -> list[dict[str, Any]]:
-            return [engine.generate(s) for s in self._scripts()]
-        return ErrorTracker(self.db).run("visual", work)
+        return [engine.generate(s) for s in self._scripts()]
 
     def video(self) -> list[dict[str, Any]]:
         from animation_engine.engine import AnimationEngine
         from video_editor.engine import VideoEditor
-        from error_handler.handler import ErrorTracker
         animator, editor = AnimationEngine(), VideoEditor()
-
-        def work() -> list[dict[str, Any]]:
-            results = []
-            for script in self._scripts():
-                topic, lang = script["topic_id"], script["language"]
-                visual = self._load("visual", topic, lang, "visual_manifest.json")
-                audio = self._load("voice", topic, lang, "voice_manifest.json")
-                animation = animator.generate(visual, audio)
-                results.append(editor.render(script, animation, audio))
-            self.db.mark_topic_used(results[0]["topic_id"] if results else "")
-            return results
-        return ErrorTracker(self.db).run("video", work)
+        results = []
+        for script in self._scripts():
+            topic, lang = script["topic_id"], script["language"]
+            visual = self._load("visual", topic, lang, "visual_manifest.json")
+            audio = self._load("voice", topic, lang, "voice_manifest.json")
+            animation = animator.generate(visual, audio)
+            results.append(editor.render(script, animation, audio))
+        if results:
+            self.db.mark_topic_used(results[0]["topic_id"])
+        return results
 
     def seo(self) -> list[dict[str, Any]]:
         from seo_engine.engine import SEOEngine
         from thumbnail_engine.engine import ThumbnailEngine
-        from error_handler.handler import ErrorTracker
         seo_engine, thumb = SEOEngine(self.ai, self.db), ThumbnailEngine()
-
-        def work() -> list[dict[str, Any]]:
-            results = []
-            for script in self._scripts():
-                topic, lang = script["topic_id"], script["language"]
-                render = self._load("videos", topic, lang, "render_manifest.json")
-                visual = self._load("visual", topic, lang, "visual_manifest.json")
-                package = seo_engine.generate(script, render)
-                package["thumbnail"] = thumb.generate(script, visual)["path"]
-                results.append(package)
-            return results
-        return ErrorTracker(self.db).run("seo", work)
-
-    def archive(self) -> list[dict[str, Any]]:
-        from storage.store import AssetStore
-        store = AssetStore()
-        archived = []
+        results = []
         for script in self._scripts():
             topic, lang = script["topic_id"], script["language"]
             render = self._load("videos", topic, lang, "render_manifest.json")
-            files = {
-                f"{topic}/{lang}/video.mp4": render["video_path"],
-                f"{topic}/{lang}/captions.srt": render["subtitle_path"],
-            }
-            seo_files = glob.glob(str(data_path("seo", f"{topic}_{lang}", "seo.json")))
-            thumb_files = glob.glob(str(data_path("thumbnails", f"{topic}_{lang}", "thumbnail.jpg")))
-            if seo_files:
-                files[f"{topic}/{lang}/seo.json"] = seo_files[0]
-            if thumb_files:
-                files[f"{topic}/{lang}/thumbnail.jpg"] = thumb_files[0]
-            archived.extend(store.put_many(files))
-        return archived
+            visual = self._load("visual", topic, lang, "visual_manifest.json")
+            package = seo_engine.generate(script, render)
+            package["thumbnail"] = thumb.generate(script, visual)["path"]
+            results.append(package)
+        return results
 
-    def upload(self) -> list[dict[str, Any]]:
-        from youtube_uploader.uploader import YouTubeUploader
-        from scheduler.scheduler import Scheduler
-        from error_handler.handler import ErrorTracker
-        uploader = YouTubeUploader(self.db)
-        slot = Scheduler().optimal_publish_at()
-
-        def work() -> list[dict[str, Any]]:
-            results = []
-            rows = [r for r in self.db.records("videos", 50)]
-            for row in rows:
-                seo_files = glob.glob(str(data_path("seo", f"{row['topic_id']}_{row['language']}", "seo.json")))
-                if not seo_files:
-                    continue
-                seo = read_json(seo_files[0], {}) or {}
-                render_files = glob.glob(str(data_path("videos", f"{row['topic_id']}_{row['language']}", "render_manifest.json")))
-                if not render_files:
-                    continue
-                render = read_json(render_files[0], {}) or {}
-                thumb_files = glob.glob(str(data_path("thumbnails", f"{row['topic_id']}_{row['language']}", "thumbnail.jpg")))
-                thumbnail = {"path": thumb_files[0]} if thumb_files else None
-                results.append(uploader.upload(seo, render, thumbnail, slot))
-            return results
-        return ErrorTracker(self.db).run("upload", work, attempts=2)
-
-    def skills_stage(self, uploads: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-        """Run every integrated skill and guarantee local delivery if not uploaded."""
+    def skills_stage(self) -> dict[str, Any]:
+        """Run every integrated skill and save the result locally."""
         from skills import youtube_agent
         from skills.resource import estimate
         from skills.seo_skill import enhance
@@ -205,7 +148,6 @@ class Pipeline:
         from common.utils import write_json
 
         reports: list[dict[str, Any]] = []
-        uploads = uploads or []
 
         def safe(fn, *args, **kwargs):
             try:
@@ -216,9 +158,7 @@ class Pipeline:
         for script in self._scripts():
             topic, lang = script["topic_id"], script["language"]
             video_id = f"{topic}_{lang}"
-            out_dir = data_path("skills", video_id)
-            render = {}
-            seo = {}
+            render, seo = {}, {}
             try:
                 render = self._load("videos", topic, lang, "render_manifest.json")
             except FileNotFoundError:
@@ -227,7 +167,6 @@ class Pipeline:
             if seo_paths:
                 seo = read_json(seo_paths[0], {}) or {}
 
-            upload_result = next((u for u in uploads if u.get("video_id") == video_id), None)
             report = {
                 "video_id": video_id,
                 "skills": youtube_agent.available(),
@@ -244,50 +183,37 @@ class Pipeline:
                 "edit_decision_list": safe(youtube_agent.edit_decision_list,
                                            render.get("subtitle_path", ""))
                 if render.get("subtitle_path") else {"skipped": True},
-                "delivery": ensure_delivered(upload_result, video_id,
-                                             "upload not performed; saved locally"),
+                "delivery": ensure_delivered(None, video_id, "direct local production"),
             }
-            write_json(out_dir / "skills_report.json", report)
+            write_json(data_path("skills", video_id, "skills_report.json"), report)
             reports.append(report)
 
-        result = {"reports": reports, "skills_used": youtube_agent.available()["skills"]}
-        log.info("Skills stage complete: %d videos, %d skills", len(reports), len(result["skills_used"]))
-        return result
+        return {"reports": reports, "skills_used": youtube_agent.available()["skills"]}
 
-    def analytics(self) -> dict[str, Any]:
-        from analytics_engine.engine import AnalyticsEngine
-        from error_handler.handler import ErrorTracker
-        return ErrorTracker(self.db).run("analytics", AnalyticsEngine(self.db).collect)
-
-    def full(self) -> dict[str, Any]:
-        self.research()
-        self.script()
+    def full(self, research: dict[str, Any] | None = None,
+             languages: list[str] | None = None) -> dict[str, Any]:
+        payload = research or self.research()
+        scripts = self.script(payload, languages=languages)
         self.voice()
         self.visual()
         renders = self.video()
         self.seo()
-        archived = self.archive()
-        uploads = self.upload()
-        skills = self.skills_stage(uploads)
-        report = self.analytics()
+        skills = self.skills_stage()
         return {
+            "topic": payload.get("title", {}).get("en", ""),
             "videos": [r["video_path"] for r in renders],
-            "archived": [a["uri"] for a in archived],
-            "uploads": [u["mode"] for u in uploads],
             "skills": len(skills["skills_used"]),
             "deliveries": [r["delivery"] for r in skills["reports"]],
-            "best_hour": report["recommendation"]["best_hour_ist"],
+            "scripts": [{"language": s["language"], "minutes": round(s["estimated_duration"] / 60, 1)}
+                        for s in scripts],
         }
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="AI YouTube Documentary Factory")
+    parser = argparse.ArgumentParser(description="Direct Local Documentary Maker")
     parser.add_argument("--stage", choices=STAGES, default="full")
     parser.add_argument("--test", action="store_true", help="short smoke-test run")
-    parser.add_argument("--dashboard", action="store_true", help="launch monitoring dashboard")
-    parser.add_argument("--automation", choices=["on", "off"], help="set master automation switch and exit")
-    parser.add_argument("--upload", choices=["on", "off"], help="set YouTube upload switch and exit")
-    parser.add_argument("--topic-category", default=None, help="restrict research to a category")
+    parser.add_argument("--dashboard", action="store_true", help="launch 3D thumbnail studio dashboard")
     return parser
 
 
@@ -298,44 +224,18 @@ def main(argv: list[str] | None = None) -> int:
         run_dashboard()
         return 0
 
-    if args.automation:
-        state = args.automation == "on"
-        set_automation_enabled(state)
-        print(f"Master automation: {'ON' if state else 'OFF'}")
-        return 0
-
-    if args.upload:
-        state = args.upload == "on"
-        set_upload_enabled(state)
-        print(f"YouTube upload: {'ON (live)' if state else 'OFF (dry-run)'}")
-        return 0
-
-    if not automation_enabled():
-        print("Automation is OFF. Turn it ON from the dashboard or run:")
-        print("  python main.py --automation on")
-        return 0
-
     pipeline = Pipeline(test_mode=args.test)
-    from notifications.notifier import Notifier
-    notifier = Notifier()
-    notifier.send("Pipeline started", f"Stage: {args.stage} | root: {ROOT}", "info")
     try:
         if args.stage == "full":
             result = pipeline.full()
         else:
             method = "skills_stage" if args.stage == "skills" else args.stage
             result = getattr(pipeline, method)()
-        print("\n=== STAGE RESULT ===")
-        if isinstance(result, (dict, list)):
-            import json
-            print(json.dumps(result, ensure_ascii=False, indent=2)[:6000])
-        else:
-            print(result)
-        notifier.send("Pipeline finished", f"Stage {args.stage} completed", "success")
+        print("\n=== RESULT ===")
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str)[:6000])
         return 0
     except Exception as exc:  # noqa: BLE001
-        log.exception("Pipeline failed: %s", exc)
-        notifier.send("Pipeline failed", str(exc), "error")
+        log.exception("Failed: %s", exc)
         return 1
 
 

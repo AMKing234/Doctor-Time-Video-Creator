@@ -1,20 +1,13 @@
-# Secrets — local-only credentials. NEVER commit these.
+# Secrets / environment — NEVER commit these.
 .env
 *.pem
 token.json
-client_secrets.json
 client_secret*.json
 credentials.json
-*youtube*token*.json
-*youtube*secret*.json
 
-# Local node: vault, state, downloaded assets, sync worktree
-local_agent/vault/
+# Local assets and generated videos (never commit large media)
 local_agent/state/
 local_agent/assets/
-.sync-work/
-sync-data/
-bus/
 
 # Runtime data (never commit large video/assets)
 data/

@@ -18,16 +18,14 @@ from common.utils import read_json, run_command
 LOCAL_CFG = read_json(ROOT / "config" / "local.json", {}) or {}
 
 # Essential = the local pipeline cannot render without these.
-# Optional  = enhancements (thumbnails via PIL, S3, YouTube upload) that degrade gracefully.
+# Optional  = enhancements (thumbnails via PIL, S3 backup) that degrade gracefully.
 ESSENTIAL_MODULES = ["requests", "edge_tts", "flask"]
-OPTIONAL_MODULES = ["PIL", "boto3", "googleapiclient"]
+OPTIONAL_MODULES = ["PIL", "boto3"]
 
 # Termux-native package names for modules that fail to build with pip on Android.
 TERMUX_PKG_FOR_MODULE = {
     "PIL": "python-pillow",
     "boto3": "python-boto3",
-    "googleapiclient": "python-google-api-python-client",
-    "google.oauth2": "python-google-auth",
 }
 
 
@@ -76,10 +74,7 @@ def _install_command(command: str) -> str:
 
 def _install_module(module: str) -> str:
     """Install a single module, preferring pip, then a Termux-native package."""
-    pip_name = {
-        "PIL": "Pillow",
-        "googleapiclient": "google-api-python-client",
-    }.get(module, module)
+    pip_name = {"PIL": "Pillow"}.get(module, module)
 
     result = run_command(
         ["python3", "-m", "pip", "install", "--disable-pip-version-check", pip_name],
@@ -113,8 +108,3 @@ def install() -> dict[str, Any]:
     report = check()
     report["actions"] = actions
     return report
-
-
-def youtube_upload_ready() -> bool:
-    """True only if every module needed for a real local upload is present."""
-    return all(_has(m) for m in ("googleapiclient", "google.oauth2", "google_auth_oauthlib"))

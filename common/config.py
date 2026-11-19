@@ -34,12 +34,6 @@ def load_settings() -> dict[str, Any]:
         settings.setdefault("voice", {})["kingvoice_repo_path"] = os.environ["KINGVOICE_REPO_PATH"]
     if os.environ.get("STORAGE_PROVIDER"):
         settings.setdefault("storage", {})["provider"] = os.environ["STORAGE_PROVIDER"]
-    if os.environ.get("YOUTUBE_ENABLED"):
-        settings.setdefault("upload", {})["enabled"] = _env_bool(
-            os.environ.get("YOUTUBE_ENABLED"), False
-        )
-    if os.environ.get("NOTIFY_WEBHOOK_URL"):
-        settings.setdefault("notifications", {})["webhook_url"] = os.environ["NOTIFY_WEBHOOK_URL"]
 
     settings.setdefault("ai", {"api_key": "", "api_base": "https://api.openai.com/v1", "model": "gpt-4o-mini"})
     settings.setdefault("image", {"api_key": "", "api_base": "https://api.openai.com/v1", "model": "gpt-image-1"})

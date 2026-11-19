@@ -1,185 +1,77 @@
-# 🎬 AI Documentary Factory
+# AI Documentary Factory — Direct Local Video Maker
 
-A self-operating AI YouTube documentary production studio. GitHub Actions is the
-orchestration centre; research, bilingual scriptwriting, narration, cinematic
-visuals, rendering, thumbnails, SEO, publishing and analytics all run automatically.
+Aap topic + timeline + minutes dete ho; system khud research karke **Full HD Hindi/English
+documentary** bana deta hai, thumbnail aur SEO banata hai, aur sab kuch local me
+archive + `REPORT.txt` ke saath save karta hai.
 
-> ⚠️ **Upload is disabled by default.** The upload stage runs in **dry-run** mode
-> and only writes a local plan. Nothing is sent to YouTube until you explicitly
-> connect OAuth **on the local node** and switch upload ON.
+> **Ab koi scheduler nahi, koi GitHub Actions nahi, koi YouTube upload nahi.**
+> Sab kuch isi device par chalta hai. Koi API key zaroori nahi.
 
-## Hybrid local + cloud system
-
-This repository now has two cooperating nodes:
-
-- **Cloud (GitHub Actions):** scheduled research, scripts, voice, visuals,
-  rendering, SEO and analytics.
-- **Local (this Termux device):** YouTube OAuth + upload, tool collection,
-  visual/thumbnail asset library, skill auto-setup, ON/OFF control, and offline
-  queueing. **YouTube credentials never leave this device.**
-- **Sync bus:** a dedicated `sync` git branch exchanges only non-secret JSON
-  manifests. A scanner blocks anything that looks like a credential.
-
-See [LOCAL_SETUP.md](LOCAL_SETUP.md) for the full local guide and
-[OPTIONAL_TOOLS.md](OPTIONAL_TOOLS.md) for all APIs, credentials and the 12 vendored
-tool/skill repositories (including the 3D thumbnail studio at `/studio`).
-
----
-
-## 1. Architecture
-
-```
-GitHub Actions (scheduler / control centre)
-        │
-        ▼
-Topic Engine → Research Engine → Script Engine (HI + EN)
-        │
-        ▼
-Voice Engine (King Voice 👑 / edge-tts) + Visual Engine (AI / FFmpeg plates)
-        │
-        ▼
-Animation → Video Editor (FFmpeg) → Thumbnail + SEO
-        │
-        ▼
-External asset storage (S3 / local) → YouTube Uploader (dry-run by default)
-        │
-        ▼
-Analytics Engine → optimal publish time → next cycle
-```
-
-Large MP4/MP3 assets are **never committed** to git. Jobs exchange small JSON
-manifests through GitHub Actions artifacts; final media goes to external storage
-(S3-compatible) or a local `storage/` folder that is git-ignored.
-
-## 2. Repository layout
-
-```
-.github/workflows/   main, research, video-production, upload, analytics
-config/              settings.json, languages.json, channel.json
-common/              config, paths, utils, logging, AI client
-research/            knowledge base + deep research engine
-topic_engine/        discovery, scoring, duplicate prevention
-script_engine/       bilingual, chaptered, emotion-tagged scripts
-voice_engine/        King Voice 👑 integration + edge-tts + offline fallback
-visual_engine/       AI images + cinematic FFmpeg plates
-animation_engine/    Ken Burns motion
-video_editor/        concat, music, subtitles, final H.264 render
-thumbnail_engine/    1280x720 thumbnails
-seo_engine/          titles, descriptions, tags, hashtags, chapters
-youtube_uploader/    OAuth upload/schedule (DISABLED by default)
-analytics_engine/    metrics + publish-time optimisation
-scheduler/           cron + optimal slot
-database/            SQLite production history
-notifications/       console + webhook
-error_handler/       retries, run tracking, error log
-storage/             local / S3 asset store
-dashboard/           Flask monitoring UI
-tests/               offline smoke tests
-```
-
-## 3. Quick start (local / Termux)
+## Quick start
 
 ```bash
 cd AI-YOUTUBE-AUTOMATION
-python3 -m pip install -r requirements.txt   # or: pkg install python ffmpeg
-python3 -m unittest discover -s tests -v
 
-# Full end-to-end smoke run (short, offline, no uploads)
-python3 main.py --stage full --test
+python3 make_video.py \
+  --topic "All Roads Lead to Rome" \
+  --timeline "Road building|Trade networks|Imperial postal system|Legacy" \
+  --minutes 8
 
-# Individual stages
-python3 main.py --stage research
-python3 main.py --stage script
-python3 main.py --stage voice
-python3 main.py --stage visual
-python3 main.py --stage video
-python3 main.py --stage seo
-python3 main.py --stage upload     # dry-run
-python3 main.py --stage analytics
-
-# Monitoring dashboard
-python3 main.py --dashboard        # http://localhost:8080
+python3 main.py --dashboard        # http://localhost:8080  (form + 3D studio)
 ```
 
-`--test` keeps the script to a few scenes so a complete run finishes quickly.
-Without `--test`, offline mode targets roughly 20–25 minutes using structured
-narrative templates. For genuinely varied long-form prose, configure an AI API key.
+Detail: [DIRECT_MODE.md](DIRECT_MODE.md) · Tools/APIs: [OPTIONAL_TOOLS.md](OPTIONAL_TOOLS.md)
 
-## 4. GitHub setup
+## Pipeline
 
-1. Create a new GitHub repository and push this folder:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial AI Documentary Factory"
-   git remote add origin https://github.com/<you>/<repo>.git
-   git push -u origin main
-   ```
-2. **Settings → Secrets and variables → Actions**, add what you need:
+```
+topic + timeline → research → script (HI+EN) → voice → visuals → animation
+→ 1920×1080 render → subtitles → thumbnail → SEO → 11 skills → REPORT.txt
+```
 
-   | Secret | Purpose |
-   | --- | --- |
-   | `AI_API_KEY` | Research + scriptwriting (OpenAI-compatible) |
-   | `AI_API_BASE` / `AI_MODEL` | Endpoint + model override |
-   | `IMAGE_API_KEY` | Cinematic AI stills (optional) |
-   | `STORAGE_PROVIDER=s3` + `S3_*` | External media storage |
-   | `YOUTUBE_ENABLED=true` | Only when ready to publish |
-   | `YOUTUBE_CLIENT_SECRETS` / `YOUTUBE_TOKEN_FILE` | OAuth files (base64-decode in workflow) |
-   | `NOTIFY_WEBHOOK_URL` | Slack/Discord notifications |
+- **Research:** aapki timeline ka har point ek "beat" ban jata hai; offline knowledge base
+  se merge hota hai. AI key ho to research aur script aur polished hote hain (optional).
+- **Duration:** `--minutes` ke hisaab se timeline beats repeat/expand hote hain taake
+  target duration mile. Koi naya historical claim nahi banaya jata.
+- **Voice:** King Voice 👑 → edge-tts → synthetic fallback (sab free/local).
+- **Visuals:** Wikimedia Commons images ya FFmpeg cinematic plates (offline).
+- **Guarantee:** video ban gaya to `local_agent/assets/archive/<id>/REPORT.txt` zaroor banega.
 
-3. The scheduler runs `main.yml` daily at **03:00 UTC**. Change `cron` in
-   `.github/workflows/main.yml` and `config/settings.json` as needed.
+## Layout
 
-## 5. Voice engine
+```
+make_video.py              direct entry point (topic + timeline + minutes)
+main.py                    stage runner + dashboard launcher
+research/ script_engine/   bilingual research + scripts
+voice_engine/ visual_engine/ animation_engine/ video_editor/
+seo_engine/ thumbnail_engine/
+skills/                    11 YouTube skills + 3 local skills + tool registry
+dashboard/                 local dashboard + three.js 3D thumbnail studio
+local_agent/fallback.py    archive + REPORT.txt
+database/                  SQLite history (duplicates skip)
+vendor/                    local tool repos (fetch_vendors.sh se dobara fetch)
+```
 
-`voice_engine/engine.py` first tries to import your existing King Voice 👑
-repository (`engine.py`) from `KINGVOICE_REPO_PATH` (default `../kingvoice`) and
-reuses its emotion presets and FFmpeg DSP. On a clean runner where the repo is
-absent, an equivalent built-in edge-tts implementation is used. If edge-tts has
-no network, a length-matched synthetic audio bed is generated so the pipeline
-still renders. No manual voice work is ever needed.
-
-## 6. Upload safety
-
-- `config/settings.json → upload.enabled` is `false`.
-- `upload.dry_run` is `true`.
-- `YOUTUBE_ENABLED` defaults to `false` in the workflow.
-- The dry-run writes `data/uploads/<video_id>.json` describing the planned upload.
-
-To go live: set both the config flag and the secret to `true`, add OAuth files,
-and decide `privacy` / `schedule_enabled`. The Analytics Engine then feeds the
-optimal publish hour back into the Scheduler automatically.
-
-## 6.1 ON/OFF switches
-
-The dashboard has two live switches (state stored in `data/control.json`, which is
-git-ignored):
-
-- **Master Automation** — turns the entire pipeline ON/OFF. Every stage checks it
-  and exits safely when OFF. In GitHub Actions, set repository variable
-  `AUTOMATION_ENABLED=false` to pause the scheduled workflow.
-- **YouTube Upload** — `OFF` = dry-run (default), `ON` = attempt a live upload once
-  OAuth is configured.
-
-CLI equivalents:
+## Commands
 
 ```bash
-python3 main.py --automation off
-python3 main.py --automation on
-python3 main.py --upload off
-python3 main.py --upload on
+python3 make_video.py --topic "..." --timeline "A|B|C" --minutes 22
+python3 main.py --stage full           # curated topic se smoke run
+python3 main.py --stage video          # sirf render
+python3 main.py --test                 # chota test
+python3 main.py --dashboard            # browser UI + /studio
+python3 local_agent/agent.py --status
+python3 local_agent/agent.py --tools-check
+python3 local_agent/agent.py --skills-list
+python3 local_agent/agent.py --tools-registry
+python3 -m unittest discover -s tests -v
 ```
 
-## 7. What is automatic
+## Safety
 
-No manual topic selection, scriptwriting, voice generation, image/frame creation,
-editing, thumbnail design, SEO, upload or scheduling. Errors are retried with
-backoff and stored in SQLite; a complete production history is kept in
-`data/automation.db` and visible in the dashboard.
+- Koi OAuth/token/client-secret file project me nahi hai aur na hi kabhi bheji jati hai.
+- `.githooks/pre-commit` credential-like files/strings ko commit hone se rokta hai
+  (`git config core.hooksPath .githooks` ek baar chalao).
+- Bade media (`*.mp4`, `*.wav`, ...) aur `data/` git-ignored hain.
 
-## 8. Roadmap notes
-
-- Replace template expansion with long-form AI scripts when a key is configured.
-- Add royalty-free music licensing/source tracking.
-- Add per-scene lip-sync or avatar presenters if desired.
-- Add multi-channel support via multiple `channel.json` profiles.
+Abhi koi video upload nahi hua aur upload ka code repo se hata diya gaya hai.

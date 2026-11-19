@@ -1,7 +1,7 @@
 {
   "project_name": "AI Documentary Factory",
-  "version": "1.0.0",
-  "description": "Fully autonomous AI documentary research, production and publishing system.",
+  "version": "2.0.0",
+  "description": "Direct local documentary maker: topic + duration in, finished MP4 out. No scheduler, no upload.",
 
   "storage": {
     "provider": "local",
@@ -50,31 +50,6 @@
     "use_ai_when_available": true,
     "facts_per_topic": 8,
     "offline_knowledge_base": true
-  },
-
-  "upload": {
-    "enabled": false,
-    "privacy": "private",
-    "notify_subscribers": false,
-    "schedule_enabled": false,
-    "dry_run": true
-  },
-
-  "analytics": {
-    "enabled": true,
-    "optimize_upload_time": true,
-    "min_samples_for_optimization": 5
-  },
-
-  "notifications": {
-    "console": true,
-    "webhook_url": ""
-  },
-
-  "scheduler": {
-    "timezone": "Asia/Kolkata",
-    "cron": "0 3 * * *",
-    "max_videos_per_day": 1
   },
 
   "paths": {
